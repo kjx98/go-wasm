@@ -33,6 +33,11 @@ func main() {
 			for _, exEntry := range sec.Exports {
 				fmt.Printf("Export %s %v @%d\n", exEntry.Field, exEntry.Kind, exEntry.Index)
 			}
+		} else if section.ID() == wasm.TypeID {
+			sec := section.(wasm.TypeSection)
+			for idx, tyEntry := range sec.Types {
+				fmt.Printf("(type $%d %s)\n", idx, tyEntry.String())
+			}
 		}
 	}
 }

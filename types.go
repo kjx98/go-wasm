@@ -7,6 +7,7 @@ package wasm
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -73,13 +74,68 @@ func varint(r io.Reader) (int32, int, error) {
 
 type ValueType int32
 
+// 0x7f: i32
+// 0x7e: i64
+// 0x7d: f32
+// 0x7c: f64
+// 0x70: anyfunc
+// 0x60: func
+// 0x40: pseudo type for an empty block_type
+const (
+	ValueI32     ValueType = -0x01
+	ValueI64               = -0x02
+	ValueF32               = -0x03
+	ValueF64               = -0x04
+	ValueAnyFunc           = -0x10
+	ValueFunc              = -0x20
+	ValueBlock             = -0x40
+)
+
+func (v ValueType) String() string {
+	switch v {
+	case ValueI32:
+		return "i32"
+	case ValueI64:
+		return "i64"
+	case ValueF32:
+		return "f32"
+	case ValueF64:
+		return "f64"
+	case ValueAnyFunc:
+		return "anyfunc"
+	case ValueFunc:
+		return "func"
+	case ValueBlock:
+		return "block_type"
+	}
+	return "unknown"
+}
+
 type BlockType varint7
 type ElemType varint7
 
 type FuncType struct {
-	form    uint32      // value for the 'func' type constructor
+	form    ValueType   // value for the 'func' type constructor
 	params  []ValueType // parameters of the function
 	results []ValueType // results of the function
+}
+
+func (fn *FuncType) String() string {
+	ret := fmt.Sprintf("(%s", fn.form)
+	if len(fn.params) > 0 {
+		ret += " (param"
+		for _, tt := range fn.params {
+			ret += " " + tt.String()
+		}
+		ret += ")"
+	}
+	if len(fn.results) > 0 {
+		ret += " (result "
+		ret += fn.results[0].String()
+		ret += ")"
+	}
+	ret += ")"
+	return ret
 }
 
 // GlobalType describes a global variable
@@ -108,13 +164,13 @@ type ExternalKind byte
 
 func (v ExternalKind) String() string {
 	switch v {
-	case 0:
+	case FunctionKind:
 		return "func"
-	case 1:
+	case TableKind:
 		return "table"
-	case 2:
+	case MemoryKind:
 		return "memory"
-	case 3:
+	case GlobalKind:
 		return "global"
 	}
 	return "unknown"

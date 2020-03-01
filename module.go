@@ -6,25 +6,14 @@ package wasm
 
 import (
 	"fmt"
-	"io"
-	"os"
+	//"io"
+	//"os"
 )
 
 // Module is a WebAssembly module.
 type Module struct {
 	Header   ModuleHeader
 	Sections []Section
-}
-
-func Open(name string) (Module, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return Module{}, err
-	}
-	defer f.Close()
-
-	dec := decoder{r: f}
-	return dec.readModule()
 }
 
 type ModuleHeader struct {
@@ -73,12 +62,7 @@ func (DataSection) ID() SectionID     { return DataID }
 func (NameSection) ID() SectionID     { return UnknownID }
 
 type TypeSection struct {
-	types []FuncType // type entries
-}
-
-func (s *TypeSection) readWasm(r io.Reader) error {
-	var err error
-	return err
+	Types []FuncType // type entries
 }
 
 type ImportSection struct {

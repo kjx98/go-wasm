@@ -10,7 +10,19 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 )
+
+func Open(name string) (Module, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return Module{}, err
+	}
+	defer f.Close()
+
+	dec := decoder{r: f}
+	return dec.readModule()
+}
 
 type decoder struct {
 	r   io.Reader
@@ -19,7 +31,15 @@ type decoder struct {
 
 func (d *decoder) readVarI7(r io.Reader, v *int32) {
 	// FIXME ?
-	d.readVarI32(r, v)
+	var bb uint32
+	bb, _, d.err = uvarint(r)
+	if d.err != nil {
+		return
+	}
+	if (bb & 0x40) != 0 {
+		bb |= 0x80
+	}
+	*v = int32(int8(bb))
 }
 
 func (d *decoder) readVarI32(r io.Reader, v *int32) {
@@ -260,9 +280,9 @@ func (d *decoder) readTypeSection(r io.Reader, s *TypeSection) {
 
 	var n uint32
 	d.readVarU32(r, &n)
-	s.types = make([]FuncType, int(n))
-	for i := range s.types {
-		d.readFuncType(r, &s.types[i])
+	s.Types = make([]FuncType, int(n))
+	for i := range s.Types {
+		d.readFuncType(r, &s.Types[i])
 	}
 }
 
@@ -271,7 +291,8 @@ func (d *decoder) readFuncType(r io.Reader, ft *FuncType) {
 		return
 	}
 
-	d.readVarU7(r, &ft.form)
+	//d.readVarI7(r, &ft.form)
+	d.readValueType(r, &ft.form)
 
 	var params uint32
 	d.readVarU32(r, &params)
