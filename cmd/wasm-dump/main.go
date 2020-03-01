@@ -38,6 +38,9 @@ func main() {
 			for idx, tyEntry := range sec.Types {
 				fmt.Printf("(type $%d %s)\n", idx, tyEntry.String())
 			}
+		} else if section.ID() == wasm.UnknownID {
+			sec := section.(wasm.NameSection)
+			fmt.Printf("Custom Section (%s), size: %d\n", sec.Name, sec.Size)
 		}
 	}
 }

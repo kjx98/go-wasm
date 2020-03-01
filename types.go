@@ -63,6 +63,8 @@ func uvarint(r io.Reader) (uint32, int, error) {
 	panic("unreachable")
 }
 
+// not work for vaint7
+/*
 func varint(r io.Reader) (int32, int, error) {
 	uv, n, err := uvarint(r)
 	v := int32(uv >> 1)
@@ -71,6 +73,7 @@ func varint(r io.Reader) (int32, int, error) {
 	}
 	return v, n, err
 }
+*/
 
 type ValueType int32
 

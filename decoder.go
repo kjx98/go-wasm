@@ -42,12 +42,16 @@ func (d *decoder) readVarI7(r io.Reader, v *int32) {
 	*v = int32(int8(bb))
 }
 
+/*
 func (d *decoder) readVarI32(r io.Reader, v *int32) {
 	if d.err != nil {
 		return
 	}
-	*v, _, d.err = varint(r)
+	var bb uint32
+	bb, _, d.err = uvarint(r)
+	*v = int32(bb)
 }
+*/
 
 func (d *decoder) readVarU1(r io.Reader, v *uint32) {
 	// FIXME ?
@@ -141,8 +145,11 @@ func (d *decoder) readSection() Section {
 	switch SectionID(id) {
 	case UnknownID:
 		var s NameSection
-		d.readNameSection(r, &s)
-		// fmt.Printf("--- name: %q, funcs: %d\n", s.name, len(s.funcs))
+		d.readString(r, &s.Name)
+		s.Size = int(r.N)
+		// if s.Name == "name" could readNameSection
+		//d.readNameSection(r, &s)
+		fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
 		sec = s
 
 	case TypeID:
@@ -237,6 +244,7 @@ func (d *decoder) readSection() Section {
 	return sec
 }
 
+/*
 func (d *decoder) readNameSection(r io.Reader, s *NameSection) {
 	if d.err != nil {
 		return
@@ -272,6 +280,7 @@ func (d *decoder) readLocalName(r io.Reader, local *LocalName) {
 
 	d.readString(r, &local.name)
 }
+*/
 
 func (d *decoder) readTypeSection(r io.Reader, s *TypeSection) {
 	if d.err != nil {

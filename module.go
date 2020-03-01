@@ -160,10 +160,11 @@ type DataSegment struct {
 
 // NameSection describes user-defined sections
 type NameSection struct {
-	name  string
-	funcs []FunctionNames
+	Name string
+	Size int
 }
 
+/*
 type FunctionNames struct {
 	name   string
 	locals []LocalName
@@ -172,6 +173,7 @@ type FunctionNames struct {
 type LocalName struct {
 	name string
 }
+*/
 
 type FunctionBody struct {
 	BodySize   uint32       // size of function body to follow, in bytes
