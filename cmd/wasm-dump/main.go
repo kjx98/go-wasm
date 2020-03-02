@@ -41,6 +41,19 @@ func main() {
 		} else if section.ID() == wasm.UnknownID {
 			sec := section.(wasm.NameSection)
 			fmt.Printf("Custom Section (%s), size: %d\n", sec.Name, sec.Size)
+			if len(sec.ModName) > 0 {
+				fmt.Printf("Module Name: %s\n", sec.ModName)
+			}
+			for _, fn := range sec.FuncName {
+				fmt.Printf("Func$%d Name: %s\n", fn.Idx, fn.Name)
+			}
+		} else if section.ID() == wasm.ImportID {
+			s := section.(wasm.ImportSection)
+			fmt.Printf("Imports: %d\n", len(s.Imports))
+			for ii, imp := range s.Imports {
+				fmt.Printf("    entry[%d]: %q|%q|%s %v\n", ii, imp.Module,
+					imp.Field, imp.Kind, imp.Typ)
+			}
 		}
 	}
 }

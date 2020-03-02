@@ -166,8 +166,8 @@ type NameSection struct {
 }
 
 type FunctionNames struct {
-	idx  uint32
-	name string
+	Idx  uint32
+	Name string
 }
 
 type FunctionBody struct {

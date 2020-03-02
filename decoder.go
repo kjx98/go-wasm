@@ -146,23 +146,26 @@ func (d *decoder) readSection() Section {
 		d.readString(r, &s.Name)
 		s.Size = int(r.N)
 		// if s.Name == "name" could readNameSection
-		//d.readNameSection(r, &s)
-		//fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
+		if s.Name == "name" {
+			d.readNameSection(r, &s)
+		} else {
+			fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
+		}
 		sec = s
 
 	case TypeID:
 		var s TypeSection
 		d.readTypeSection(r, &s)
-		// fmt.Printf("--- types: %d\n", len(s.types))
+		// fmt.Printf("--- types: %d\n", len(s.Types))
 		sec = s
 
 	case ImportID:
 		var s ImportSection
 		d.readImportSection(r, &s)
-		// fmt.Printf("--- imports: %d\n", len(s.imports))
 		/*
-			for ii, imp := range s.imports {
-				fmt.Printf("    entry[%d]: %q|%q|%x\n", ii, imp.module, imp.field, imp.kind)
+			fmt.Printf("--- imports: %d\n", len(s.Imports))
+			for ii, imp := range s.Imports {
+				fmt.Printf("    entry[%d]: %q|%q|%s\n", ii, imp.Module, imp.Field, imp.Kind)
 			}
 		*/
 		sec = s
@@ -201,7 +204,7 @@ func (d *decoder) readSection() Section {
 	case ExportID:
 		var s ExportSection
 		d.readExportSection(r, &s)
-		// fmt.Printf("--- exports: %d\n", len(s.exports))
+		// fmt.Printf("--- exports: %d\n", len(s.Exports))
 		sec = s
 
 	case StartID:
@@ -242,43 +245,44 @@ func (d *decoder) readSection() Section {
 	return sec
 }
 
-/*
 func (d *decoder) readNameSection(r io.Reader, s *NameSection) {
-	if d.err != nil {
-		return
-	}
-
-	d.readString(r, &s.name)
-	var n uint32
-	d.readVarU32(r, &n)
-	s.funcs = make([]FunctionNames, int(n))
-	for i := range s.funcs {
-		d.readFunctionNames(r, &s.funcs[i])
+	for {
+		if d.err != nil {
+			return
+		}
+		var nType uint32
+		d.readVarU7(r, &nType)
+		if d.err != nil {
+			return
+		}
+		var sz uint32
+		d.readVarU32(r, &sz)
+		if d.err != nil {
+			return
+		}
+		rr := &io.LimitedReader{R: r, N: int64(sz)}
+		switch nType {
+		case 0: // Module Name
+			d.readString(rr, &s.ModName)
+			//log.Printf("wasm: got Module name: %s\n", s.ModName)
+		case 1: // FunctionNames
+			var n uint32
+			d.readVarU32(rr, &n)
+			s.FuncName = make([]FunctionNames, int(n))
+			for i := range s.FuncName {
+				d.readVarU32(rr, &s.FuncName[i].Idx)
+				d.readString(rr, &s.FuncName[i].Name)
+			}
+		case 2: // Local
+		}
+		if rr.N > 0 {
+			log.Printf("wasm: NameSection N=%d/%d bytes unread! (NameType=%d)\n",
+				rr.N, sz, nType)
+			buf := make([]byte, rr.N)
+			d.read(rr, buf)
+		}
 	}
 }
-
-func (d *decoder) readFunctionNames(r io.Reader, f *FunctionNames) {
-	if d.err != nil {
-		return
-	}
-
-	d.readString(r, &f.name)
-	var n uint32
-	d.readVarU32(r, &n)
-	f.locals = make([]LocalName, int(n))
-	for i := range f.locals {
-		d.readLocalName(r, &f.locals[i])
-	}
-}
-
-func (d *decoder) readLocalName(r io.Reader, local *LocalName) {
-	if d.err != nil {
-		return
-	}
-
-	d.readString(r, &local.name)
-}
-*/
 
 func (d *decoder) readTypeSection(r io.Reader, s *TypeSection) {
 	if d.err != nil {
