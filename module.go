@@ -85,7 +85,7 @@ type ImportEntry struct {
 
 // FunctionSection declares the signature of all functions in the module
 type FunctionSection struct {
-	types []uint32 // indices into the type sections
+	Types []uint32 // indices into the type sections
 }
 
 // TableSection encodes a table
