@@ -13,6 +13,13 @@ import (
 
 var order = binary.LittleEndian
 
+var (
+	errOverflow = errors.New("wasm: overflow")
+	errInvOp    = errors.New("wasm: invalid Op code")
+	errOpEnd    = errors.New("wasm: must be Op_End")
+	errMalform  = errors.New("wasm: varint/varuint malformed")
+)
+
 type (
 	varuint32 uint32
 	varuint7  uint32
@@ -41,6 +48,7 @@ func (v *varuint7) read(r io.Reader) (int, error) {
 	return n, nil
 }
 
+// no varint64 yet
 func uvarint(r io.Reader) (uint32, int, error) {
 	var x uint32
 	var s uint
@@ -53,9 +61,9 @@ func uvarint(r io.Reader) (uint32, int, error) {
 		b := buf[0]
 		if b < 0x80 {
 			if i > 9 || i == 9 && b > 1 {
-				return 0, i, errors.New("wasm: overflow")
+				return 0, i, errOverflow
 			}
-			return x | uint32(b)<<s, i, nil
+			return x | uint32(b)<<s, i + 1, nil
 		}
 		x |= uint32(b&0x7f) << s
 		s += 7
@@ -64,16 +72,16 @@ func uvarint(r io.Reader) (uint32, int, error) {
 }
 
 // not work for vaint7
-/*
+// no varint64 yet
 func varint(r io.Reader) (int32, int, error) {
 	uv, n, err := uvarint(r)
-	v := int32(uv >> 1)
-	if uv&1 != 0 {
-		v = ^v
+	if n == 1 && (uv&0x40) != 0 {
+		v := int32(int8(uv | 0x80))
+		return v, n, err
 	}
+	v := int32(uv)
 	return v, n, err
 }
-*/
 
 type ValueType int32
 
@@ -198,8 +206,8 @@ type ResizableLimits struct {
 }
 
 // InitExpr encodes an initializer expression.
+// only i32.const support, i64.const convert to i32
 // FIXME
 type InitExpr struct {
-	Expr []byte
-	End  byte
+	Expr int32
 }

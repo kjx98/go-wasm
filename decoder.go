@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 )
@@ -30,37 +31,34 @@ type decoder struct {
 }
 
 func (d *decoder) readVarI7(r io.Reader, v *int32) {
-	// FIXME ?
-	var bb uint32
-	bb, _, d.err = uvarint(r)
-	if d.err != nil {
-		return
+	var n int
+	*v, n, d.err = varint(r)
+	if d.err == nil && n != 1 {
+		d.err = errMalform
 	}
-	if (bb & 0x40) != 0 {
-		bb |= 0x80
-	}
-	*v = int32(int8(bb))
 }
 
-/*
 func (d *decoder) readVarI32(r io.Reader, v *int32) {
 	if d.err != nil {
 		return
 	}
-	var bb uint32
-	bb, _, d.err = uvarint(r)
-	*v = int32(bb)
+	*v, _, d.err = varint(r)
 }
-*/
 
 func (d *decoder) readVarU1(r io.Reader, v *uint32) {
 	// FIXME ?
-	d.readVarU32(r, v)
+	d.readVarU7(r, v)
 }
 
 func (d *decoder) readVarU7(r io.Reader, v *uint32) {
-	// FIXME ?
-	d.readVarU32(r, v)
+	var n int
+	if d.err != nil {
+		return
+	}
+	*v, n, d.err = uvarint(r)
+	if d.err == nil && n != 1 {
+		d.err = errMalform
+	}
 }
 
 func (d *decoder) readVarU32(r io.Reader, v *uint32) {
@@ -132,7 +130,7 @@ func (d *decoder) readSection() Section {
 		sec Section
 	)
 
-	d.readVarU32(d.r, &id)
+	d.readVarU7(d.r, &id)
 	if d.err != nil {
 		if d.err == io.EOF {
 			d.err = nil
@@ -149,7 +147,7 @@ func (d *decoder) readSection() Section {
 		s.Size = int(r.N)
 		// if s.Name == "name" could readNameSection
 		//d.readNameSection(r, &s)
-		fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
+		//fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
 		sec = s
 
 	case TypeID:
@@ -335,9 +333,9 @@ func (d *decoder) readImportSection(r io.Reader, s *ImportSection) {
 
 	var sz uint32
 	d.readVarU32(r, &sz)
-	s.imports = make([]ImportEntry, int(sz))
-	for i := range s.imports {
-		d.readImportEntry(r, &s.imports[i])
+	s.Imports = make([]ImportEntry, int(sz))
+	for i := range s.Imports {
+		d.readImportEntry(r, &s.Imports[i])
 	}
 }
 
@@ -346,34 +344,34 @@ func (d *decoder) readImportEntry(r io.Reader, ie *ImportEntry) {
 		return
 	}
 
-	d.readString(r, &ie.module)
-	d.readString(r, &ie.field)
-	d.readExternalKind(r, &ie.kind)
+	d.readString(r, &ie.Module)
+	d.readString(r, &ie.Field)
+	d.readExternalKind(r, &ie.Kind)
 
-	switch ie.kind {
+	switch ie.Kind {
 	case FunctionKind:
 		var idx uint32
 		d.readVarU32(r, &idx)
-		ie.typ = idx
+		ie.Typ = idx
 
 	case TableKind:
 		var tt TableType
 		d.readTableType(r, &tt)
-		ie.typ = tt
+		ie.Typ = tt
 
 	case MemoryKind:
 		var mt MemoryType
 		d.readMemoryType(r, &mt)
-		ie.typ = mt
+		ie.Typ = mt
 
 	case GlobalKind:
 		var gt GlobalType
 		d.readGlobalType(r, &gt)
-		ie.typ = gt
+		ie.Typ = gt
 
 	default:
-		fmt.Printf("module=%q field=%q\n", ie.module, ie.field)
-		d.err = fmt.Errorf("wasm: invalid ExternalKind (%d)", byte(ie.kind))
+		fmt.Printf("module=%q field=%q\n", ie.Module, ie.Field)
+		d.err = fmt.Errorf("wasm: invalid ExternalKind (%d)", byte(ie.Kind))
 	}
 }
 
@@ -413,7 +411,7 @@ func (d *decoder) readResizableLimits(r io.Reader, tl *ResizableLimits) {
 
 	d.readVarU32(r, &tl.Flags)
 	d.readVarU32(r, &tl.Initial)
-	if tl.Flags&0x1 != 0 {
+	if (tl.Flags & 0x1) != 0 {
 		d.readVarU32(r, &tl.Maximum)
 	}
 }
@@ -508,23 +506,27 @@ func (d *decoder) readInitExpr(r io.Reader, ie *InitExpr) {
 	var err error
 	var n int
 	var buf [1]byte
-	for {
-		n, err = r.Read(buf[:])
-		if err != nil || n <= 0 {
-			break
-		}
-		v := buf[0]
-		if v == Op_end {
-			ie.End = byte(Op_end)
-			break
-		}
-		ie.Expr = append(ie.Expr, v)
+	n, err = r.Read(buf[:])
+	if err != nil || n <= 0 {
+		return
 	}
-	if err == io.EOF {
-		err = nil
+	switch Opcode(buf[0]) {
+	case Op_i32_const:
+		fallthrough
+	case Op_i64_const:
+		d.readVarI32(r, &ie.Expr)
+	default: // error
+		d.err = errInvOp
 	}
-	if err != nil {
+	n, err = r.Read(buf[:])
+	if err != nil || n <= 0 {
 		d.err = err
+		return
+	}
+	v := buf[0]
+	if v != Op_end {
+		// error
+		d.err = errOpEnd
 	}
 }
 
@@ -615,37 +617,7 @@ func (d *decoder) readFunctionBody(r io.Reader, fb *FunctionBody) {
 		d.readLocalEntry(r, &fb.Locals[i])
 	}
 
-	rcode := new(bytes.Buffer)
-	io.Copy(rcode, r)
-	d.readCode(rcode, &fb.Code)
-}
-
-func (d *decoder) readCode(r io.Reader, code *Code) {
-	if d.err != nil {
-		return
-	}
-
-	var err error
-	var n int
-	var buf [1]byte
-	for {
-		n, err = r.Read(buf[:])
-		if err != nil || n <= 0 {
-			break
-		}
-		v := buf[0]
-		if v == Op_end {
-			code.End = byte(Op_end)
-			break
-		}
-		code.Code = append(code.Code, v)
-	}
-	if err == io.EOF {
-		err = nil
-	}
-	if err != nil {
-		d.err = err
-	}
+	fb.Code, d.err = ioutil.ReadAll(r)
 }
 
 func (d *decoder) readLocalEntry(r io.Reader, le *LocalEntry) {

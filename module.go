@@ -6,8 +6,6 @@ package wasm
 
 import (
 	"fmt"
-	//"io"
-	//"os"
 )
 
 // Module is a WebAssembly module.
@@ -66,15 +64,16 @@ type TypeSection struct {
 }
 
 type ImportSection struct {
-	imports []ImportEntry
+	Imports []ImportEntry
 }
 
+// EWASM only support func import
 type ImportEntry struct {
-	module string
-	field  string
-	kind   ExternalKind // the kind of definition being imported
+	Module string
+	Field  string
+	Kind   ExternalKind // the kind of definition being imported
 
-	typ interface{} // imported value
+	Typ interface{} // imported value
 
 	/*
 		FunctionType varuint32  // type index of the function signature (if Kind is Function)
@@ -160,31 +159,22 @@ type DataSegment struct {
 
 // NameSection describes user-defined sections
 type NameSection struct {
-	Name string
-	Size int
+	Name     string
+	Size     int
+	ModName  string
+	FuncName []FunctionNames
 }
 
-/*
 type FunctionNames struct {
-	name   string
-	locals []LocalName
-}
-
-type LocalName struct {
+	idx  uint32
 	name string
 }
-*/
 
 type FunctionBody struct {
 	BodySize   uint32       // size of function body to follow, in bytes
 	LocalCount varuint32    // number of local entries
 	Locals     []LocalEntry // local variables
-	Code       Code         // bytecode of the function
-}
-
-type Code struct {
-	Code []byte // bytecode of the function
-	End  byte   // 0x0b, indicating the end of the body
+	Code       []byte       // bytecode of the function
 }
 
 type LocalEntry struct {
