@@ -117,9 +117,8 @@ func (d *decoder) readSection() Section {
 		// fmt.Printf("--- globals: %d\n", len(s.globals))
 		/*
 			for ii, ge := range s.globals {
-				fmt.Printf("   ge[%d]: type={%x, 0x%x} init=%d\n",
-					ii, ge.Type.ContentType, ge.Type.Mutability, len(ge.Init.Expr),
-				)
+				fmt.Printf("   ge[%d]: type={%s, 0x%x} init=%d\n", ii,
+					ge.Type.ContentType, ge.Type.Mutability, ge.Init.Value)
 			}
 		*/
 		sec = s
@@ -273,9 +272,14 @@ func (d *decoder) readInitExpr(r io.Reader, ie *InitExpr) {
 	case Op_i32_const:
 		fallthrough
 	case Op_i64_const:
-		d.readVarI32(r, &ie.Expr)
+		d.readVarI64(r, &ie.Value)
+	case Op_f32_const:
+		fallthrough
+	case Op_f64_const:
+		d.readVarI64(r, &ie.Value)
 	default: // error
 		d.err = errInvOp
+		log.Printf("wasm: invalid Opcode for init_expr %x)\n", buf[0])
 	}
 	n, err = r.Read(buf[:])
 	if err != nil || n <= 0 {

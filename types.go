@@ -7,7 +7,6 @@ package wasm
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -48,9 +47,32 @@ func (v *varuint7) read(r io.Reader) (int, error) {
 	return n, nil
 }
 
-// no varint64 yet
+// uvarint for uvar1/uvar7/uvar32, no uvar64
 func uvarint(r io.Reader) (uint32, int, error) {
 	var x uint32
+	var s uint
+	var buf = make([]byte, 1)
+	for i := 0; ; i++ {
+		_, err := r.Read(buf)
+		if err != nil {
+			return 0, i, err
+		}
+		b := buf[0]
+		if b < 0x80 {
+			if i > 4 || i == 4 && b > 15 {
+				return 0, i, errOverflow
+			}
+			return x | uint32(b)<<s, i + 1, nil
+		}
+		x |= uint32(b&0x7f) << s
+		s += 7
+	}
+	panic("unreachable")
+}
+
+// varint for var7/var32/var64
+func varint(r io.Reader) (int64, int, error) {
+	var x int64
 	var s uint
 	var buf = make([]byte, 1)
 	for i := 0; ; i++ {
@@ -63,24 +85,15 @@ func uvarint(r io.Reader) (uint32, int, error) {
 			if i > 9 || i == 9 && b > 1 {
 				return 0, i, errOverflow
 			}
-			return x | uint32(b)<<s, i + 1, nil
+			if (b & 0x40) != 0 {
+				b |= 0x80
+			}
+			return x | int64(int8(b))<<s, i + 1, nil
 		}
-		x |= uint32(b&0x7f) << s
+		x |= int64(b&0x7f) << s
 		s += 7
 	}
 	panic("unreachable")
-}
-
-// not work for vaint7
-// no varint64 yet
-func varint(r io.Reader) (int32, int, error) {
-	uv, n, err := uvarint(r)
-	if n == 1 && (uv&0x40) != 0 {
-		v := int32(int8(uv | 0x80))
-		return v, n, err
-	}
-	v := int32(uv)
-	return v, n, err
 }
 
 type ValueType int32
@@ -132,7 +145,7 @@ type FuncType struct {
 }
 
 func (fn *FuncType) String() string {
-	ret := fmt.Sprintf("(%s", fn.form)
+	ret := "(" + fn.form.String()
 	if len(fn.params) > 0 {
 		ret += " (param"
 		for _, tt := range fn.params {
@@ -209,5 +222,6 @@ type ResizableLimits struct {
 // only i32.const support, i64.const convert to i32
 // FIXME
 type InitExpr struct {
-	Expr int32
+	Value int64
+	//Expr  []byte
 }

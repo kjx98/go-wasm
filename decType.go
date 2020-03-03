@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 )
 
 type decoder struct {
@@ -18,13 +19,24 @@ type decoder struct {
 
 func (d *decoder) readVarI7(r io.Reader, v *int32) {
 	var n int
-	*v, n, d.err = varint(r)
+	var vv int64
+	vv, n, d.err = varint(r)
 	if d.err == nil && n != 1 {
 		d.err = errMalform
 	}
+	*v = int32(vv)
 }
 
 func (d *decoder) readVarI32(r io.Reader, v *int32) {
+	if d.err != nil {
+		return
+	}
+	var vv int64
+	vv, _, d.err = varint(r)
+	*v = int32(vv)
+}
+
+func (d *decoder) readVarI64(r io.Reader, v *int64) {
 	if d.err != nil {
 		return
 	}
@@ -176,7 +188,7 @@ func (d *decoder) readImportEntry(r io.Reader, ie *ImportEntry) {
 		ie.Typ = gt
 
 	default:
-		fmt.Printf("module=%q field=%q\n", ie.Module, ie.Field)
+		log.Printf("module=%q field=%q\n", ie.Module, ie.Field)
 		d.err = fmt.Errorf("wasm: invalid ExternalKind (%d)", byte(ie.Kind))
 	}
 }
