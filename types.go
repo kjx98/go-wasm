@@ -38,6 +38,12 @@ func (v *varuint32) read(r io.Reader) (int, error) {
 	return n, nil
 }
 
+func (v *varuint32) write(w io.Writer) error {
+	bb := v.bytes()
+	_, err := w.Write(bb)
+	return err
+}
+
 func (v *varuint7) read(r io.Reader) (int, error) {
 	vv, n, err := uvarint(r)
 	if err != nil {
@@ -45,6 +51,30 @@ func (v *varuint7) read(r io.Reader) (int, error) {
 	}
 	*v = varuint7(vv)
 	return n, nil
+}
+
+func (v *varuint7) write(w io.Writer) error {
+	bb := make([]byte, 1)
+	bb[0] = byte(*v & 0x7f)
+	_, err := w.Write(bb)
+	return err
+}
+
+func (vp *varuint32) bytes() []byte {
+	v := uint32(*vp)
+	ret := make([]byte, 5)
+	var i int
+	for i = 0; i < len(ret); i++ {
+		ret[i] = byte(v & 0x7f)
+		v >>= 7
+		if v == 0 {
+			i++
+			break
+		} else {
+			ret[i] |= 0x80
+		}
+	}
+	return ret[:i]
 }
 
 // uvarint for uvar1/uvar7/uvar32, no uvar64
