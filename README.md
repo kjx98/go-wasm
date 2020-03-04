@@ -5,3 +5,7 @@
 ## wasm-dump
 
 `wasm-dump` inspects a `WASM` module file.
+
+## ewasm-val
+
+`ewasm-val` validate `EWASM` module file and strip useless exports and custom sections.

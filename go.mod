@@ -1,3 +1,3 @@
-module github.com/kjx98/go-wasm
+module github.com/shbta/go-wasm
 
 go 1.13

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/kjx98/go-wasm"
+	"github.com/shbta/go-wasm"
 )
 
 func main() {
