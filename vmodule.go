@@ -12,12 +12,14 @@ import (
 )
 
 var (
-	errHead        = errors.New("wasm: header missing")
-	errExports     = errors.New("wasm: MUST only 2 exports")
-	errExpMiss     = errors.New("wasm: exports no main or memory")
-	errExpError    = errors.New("wasm: exports main or memory sig error")
-	errHasStart    = errors.New("wasm: start Entry not empty")
-	errReadSection = errors.New("wasm: Validate Module, section malformed")
+	errHead          = errors.New("wasm: header missing")
+	errExports       = errors.New("wasm: MUST only 2 exports")
+	errExpMiss       = errors.New("wasm: exports no main or memory")
+	errExpError      = errors.New("wasm: exports main or memory sig error")
+	errHasStart      = errors.New("wasm: start Entry not empty")
+	errReadSection   = errors.New("wasm: Validate Module, section malformed")
+	errImportFunc    = errors.New("wasm: Validate, unsolved import")
+	errImportNotFunc = errors.New("wasm: Validate, import not func")
 )
 
 // Module is a WebAssembly module.
@@ -167,6 +169,47 @@ func (vm *ValModule) getFuncSig(idx uint32) *FuncType {
 	return &vm.typ.Types[tyIdx]
 }
 
+type funcMap struct {
+	params  []ValueType
+	results []ValueType
+}
+
+var dbgMap = map[string]funcMap{
+	"print":           {},
+	"printMem":        {},
+	"printMemHex":     {},
+	"printStorage":    {},
+	"printStorageHex": {},
+}
+
+var ethMap = map[string]funcMap{
+	"finish":          {},
+	"revert":          {},
+	"getCallDataSize": {},
+	"callDataCopy":    {},
+	"storageLoad":     {},
+	"storageStore":    {},
+	"getCaller":       {},
+}
+
+func solveImport(modName string, fn string, typ *FuncType) bool {
+	verify := func(mm map[string]funcMap) bool {
+		if _, ok := mm[fn]; !ok {
+			log.Printf("unsolved import: mod(%s) func(%s)\n", modName, fn)
+			return false
+		}
+		return true
+	}
+	if modName == "debug" {
+		return verify(dbgMap)
+	} else if modName != "ethereum" {
+		log.Printf("unknown module: %s\n", modName)
+		return false
+	}
+	return verify(ethMap)
+	// return true
+}
+
 func (vm *ValModule) Validate() error {
 	if len(vm.exp.Exports) != 2 {
 		return errExports
@@ -188,6 +231,20 @@ func (vm *ValModule) Validate() error {
 		return errHasStart
 	}
 	// shall we validate import
+	for _, imp := range vm.imp.Imports {
+		if imp.Kind != FunctionKind {
+			return errImportNotFunc
+		}
+		if idx, ok := imp.Typ.(uint32); !ok {
+			log.Printf("func idx not uint32: %v\n", imp.Typ)
+			return errImportFunc
+		} else if int(idx) >= len(vm.typ.Types) {
+			log.Printf("no func sig for idx: %d\n", idx)
+			return errImportFunc
+		} else if !solveImport(imp.Module, imp.Field, &vm.typ.Types[idx]) {
+			return errImportFunc
+		}
+	}
 	return nil
 }
 
