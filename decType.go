@@ -18,6 +18,9 @@ type decoder struct {
 }
 
 func (d *decoder) readVarI7(r io.Reader, v *int32) {
+	if d.err != nil {
+		return
+	}
 	var n int
 	var vv int64
 	vv, n, d.err = varint(r)
@@ -49,10 +52,10 @@ func (d *decoder) readVarU1(r io.Reader, v *uint32) {
 }
 
 func (d *decoder) readVarU7(r io.Reader, v *uint32) {
-	var n int
 	if d.err != nil {
 		return
 	}
+	var n int
 	*v, n, d.err = uvarint(r)
 	if d.err == nil && n != 1 {
 		d.err = errMalform
@@ -72,6 +75,9 @@ func (d *decoder) readString(r io.Reader, s *string) {
 	}
 	var sz uint32
 	d.readVarU32(r, &sz)
+	if d.err != nil {
+		return
+	}
 	var buf = make([]byte, sz)
 	d.read(r, buf)
 	*s = string(buf)
@@ -100,12 +106,12 @@ func (d *decoder) readHeader(r io.Reader, hdr *ModuleHeader) {
 }
 
 func (d *decoder) readTypeSection(r io.Reader, s *TypeSection) {
+	var n uint32
+	d.readVarU32(r, &n)
 	if d.err != nil {
 		return
 	}
 
-	var n uint32
-	d.readVarU32(r, &n)
 	s.Types = make([]FuncType, int(n))
 	for i := range s.Types {
 		d.readFuncType(r, &s.Types[i])
@@ -121,6 +127,9 @@ func (d *decoder) readFuncType(r io.Reader, ft *FuncType) {
 
 	var params uint32
 	d.readVarU32(r, &params)
+	if d.err != nil {
+		return
+	}
 	ft.params = make([]ValueType, int(params))
 	for i := range ft.params {
 		d.readValueType(r, &ft.params[i])
@@ -128,6 +137,9 @@ func (d *decoder) readFuncType(r io.Reader, ft *FuncType) {
 
 	var results uint32
 	d.readVarU32(r, &results)
+	if d.err != nil {
+		return
+	}
 	ft.results = make([]ValueType, int(results))
 	for i := range ft.results {
 		d.readValueType(r, &ft.results[i])
@@ -145,12 +157,12 @@ func (d *decoder) readValueType(r io.Reader, vt *ValueType) {
 }
 
 func (d *decoder) readImportSection(r io.Reader, s *ImportSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.Imports = make([]ImportEntry, int(sz))
 	for i := range s.Imports {
 		d.readImportEntry(r, &s.Imports[i])
@@ -254,12 +266,12 @@ func (d *decoder) readGlobalType(r io.Reader, gt *GlobalType) {
 }
 
 func (d *decoder) readFunctionSection(r io.Reader, s *FunctionSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.Types = make([]uint32, int(sz))
 	for i := range s.Types {
 		d.readVarU32(r, &s.Types[i])
@@ -267,12 +279,12 @@ func (d *decoder) readFunctionSection(r io.Reader, s *FunctionSection) {
 }
 
 func (d *decoder) readExportSection(r io.Reader, s *ExportSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.Exports = make([]ExportEntry, int(sz))
 	for i := range s.Exports {
 		d.readExportEntry(r, &s.Exports[i])

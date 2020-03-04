@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	errHead        = errors.New("wasm: header missing")
 	errExports     = errors.New("wasm: MUST only 2 exports")
 	errExpMiss     = errors.New("wasm: exports no main or memory")
 	errExpError    = errors.New("wasm: exports main or memory sig error")
@@ -34,8 +35,15 @@ func (vm *ValModule) ReadValModule(inbuf []byte) error {
 	d := decoder{r: rd}
 	var hdr ModuleHeader
 	d.readHeader(d.r, &hdr)
+	if d.err != nil {
+		return errHead
+	}
+	vm.buff = inbuf[:8]
 	for {
 		if err := vm.readSection(&d); err != nil {
+			if err == io.EOF {
+				break
+			}
 			return err
 		}
 	}
@@ -48,16 +56,16 @@ func (vm *ValModule) readSection(d *decoder) error {
 		sz  uint32
 		sec Section
 	)
-	var wBuff bytes.Buffer
-	dr := io.TeeReader(d.r, &wBuff)
+	out := new(bytes.Buffer)
+	dr := io.TeeReader(d.r, out)
 	d.readVarU7(dr, &id)
 	if d.err != nil {
-		if d.err == io.EOF {
-			d.err = nil
-		}
-		return nil
+		return d.err
 	}
 	d.readVarU32(dr, &sz)
+	if d.err != nil {
+		return errReadSection
+	}
 
 	r := &io.LimitedReader{R: dr, N: int64(sz)}
 	switch SectionID(id) {
@@ -73,6 +81,7 @@ func (vm *ValModule) readSection(d *decoder) error {
 		for _, ep := range s.Exports {
 			if (ep.Field == "main" && ep.Kind == FunctionKind) ||
 				(ep.Field == "memory" && ep.Kind == MemoryKind) {
+				//log.Printf("Got export %s %s\n", ep.Field, ep.Kind)
 				vm.exp.Exports = append(vm.exp.Exports, ep)
 				if len(vm.exp.Exports) >= 2 {
 					break
@@ -86,6 +95,9 @@ func (vm *ValModule) readSection(d *decoder) error {
 		buf := make([]byte, sz)
 		d.read(r, buf)
 	}
+	if d.err != nil {
+		return errReadSection
+	}
 	if r.N != 0 {
 		log.Printf("wasm: N=%d bytes unread! (section=%d)\n", r.N, sec.ID())
 		return errReadSection
@@ -97,22 +109,39 @@ func (vm *ValModule) readSection(d *decoder) error {
 		{
 			var obuf []byte
 			for _, ep := range vm.exp.Exports {
-				ebuff := make([]byte, len(ep.Field)+2)
-				ebuff[0] = byte(len(ep.Field))
+				namLen := len(ep.Field)
+				if namLen > 64 {
+					return errReadSection
+				}
+				ebuff := make([]byte, namLen+2)
+				ebuff[0] = byte(namLen)
 				copy(ebuff[1:], []byte(ep.Field))
-				ebuff[len(ep.Field)+1] = byte(ep.Kind)
+				ebuff[namLen+1] = byte(ep.Kind)
 				uv32 := varuint32(ep.Index)
-				ebuff = append(ebuff, uv32.bytes())
-				obuf = append(obuf)
+				ebuff = append(ebuff, uv32.bytes()...)
+				obuf = append(obuf, ebuff...)
+				/*
+					log.Printf("encode export %s len: %d, %v\n", ep.Field,
+						len(ebuff), ebuff)
+				*/
 			}
 			if len(obuf) > 0 {
-				uv32 := varuint32(len(obuf))
-				vm.buff = append(vm.buff, byte(id), uv32.bytes()...)
-				vm.buff = append(vm.buff, obuf...)
+				var ebuff []byte
+				nExp := len(vm.exp.Exports)
+				if nExp > 64 {
+					return errExports
+				}
+				uv32 := varuint32(len(obuf) + 1)
+				ebuff = append(ebuff, byte(id))
+				ebuff = append(ebuff, uv32.bytes()...)
+				ebuff = append(ebuff, byte(nExp))
+				ebuff = append(ebuff, obuf...)
+				//log.Printf("export section len: %d, %v\n", len(ebuff), ebuff)
+				vm.buff = append(vm.buff, ebuff...)
 			}
 		}
 	default:
-		vm.buff = append(vm.buff, wBuff.Bytes()...)
+		vm.buff = append(vm.buff, out.Bytes()...)
 	}
 	return nil
 }

@@ -5,7 +5,7 @@
 package wasm
 
 import (
-	"bytes"
+	//"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,12 +30,11 @@ func (d *decoder) readModule() (Module, error) {
 		err error
 	)
 
+	d.readHeader(d.r, &m.Header)
 	if d.err != nil {
 		err = d.err
 		return m, err
 	}
-
-	d.readHeader(d.r, &m.Header)
 	for {
 		s := d.readSection()
 		if s == nil {
@@ -61,19 +60,24 @@ func (d *decoder) readSection() Section {
 		return nil
 	}
 	d.readVarU32(d.r, &sz)
+	if d.err != nil {
+		return nil
+	}
 
 	r := &io.LimitedReader{R: d.r, N: int64(sz)}
 	switch SectionID(id) {
 	case UnknownID:
 		var s NameSection
 		d.readString(r, &s.Name)
-		s.Size = int(r.N)
+		s.Size = int(sz)
 		// if s.Name == "name" could readNameSection
 		if s.Name == "name" {
 			d.readNameSection(r, &s)
 		} else {
-			fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
+			buf := make([]byte, r.N)
+			d.read(r, buf)
 		}
+		// fmt.Printf("--- name: %q, size: %d\n", s.Name, s.Size)
 		sec = s
 
 	case TypeID:
@@ -154,6 +158,7 @@ func (d *decoder) readSection() Section {
 		sec = s
 
 	default:
+		log.Printf("wasm: invalid section ID(%d)\n", id)
 		d.err = fmt.Errorf("wasm: invalid section ID")
 
 	}
@@ -175,6 +180,9 @@ func (d *decoder) readNameSection(r io.Reader, s *NameSection) {
 		var nType uint32
 		d.readVarU7(r, &nType)
 		if d.err != nil {
+			if d.err == io.EOF {
+				d.err = nil
+			}
 			return
 		}
 		var sz uint32
@@ -207,12 +215,12 @@ func (d *decoder) readNameSection(r io.Reader, s *NameSection) {
 }
 
 func (d *decoder) readTableSection(r io.Reader, s *TableSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.tables = make([]TableType, int(sz))
 	for i := range s.tables {
 		d.readTableType(r, &s.tables[i])
@@ -220,12 +228,12 @@ func (d *decoder) readTableSection(r io.Reader, s *TableSection) {
 }
 
 func (d *decoder) readMemorySection(r io.Reader, s *MemorySection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.memories = make([]MemoryType, int(sz))
 	for i := range s.memories {
 		d.readMemoryType(r, &s.memories[i])
@@ -233,12 +241,12 @@ func (d *decoder) readMemorySection(r io.Reader, s *MemorySection) {
 }
 
 func (d *decoder) readGlobalSection(r io.Reader, s *GlobalSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.globals = make([]GlobalVariable, int(sz))
 	for i := range s.globals {
 		d.readGlobalVariable(r, &s.globals[i])
@@ -250,8 +258,8 @@ func (d *decoder) readGlobalVariable(r io.Reader, gv *GlobalVariable) {
 		return
 	}
 
-	out := new(bytes.Buffer)
-	r = io.TeeReader(r, out)
+	//out := new(bytes.Buffer)
+	//r = io.TeeReader(r, out)
 	d.readGlobalType(r, &gv.Type)
 	d.readInitExpr(r, &gv.Init)
 }
@@ -302,12 +310,12 @@ func (d *decoder) readStartSection(r io.Reader, s *StartSection) {
 }
 
 func (d *decoder) readElementSection(r io.Reader, s *ElementSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.elements = make([]ElemSegment, int(sz))
 	for i := range s.elements {
 		d.readElemSegment(r, &s.elements[i])
@@ -331,12 +339,12 @@ func (d *decoder) readElemSegment(r io.Reader, es *ElemSegment) {
 }
 
 func (d *decoder) readCodeSection(r io.Reader, s *CodeSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.Bodies = make([]FunctionBody, int(sz))
 	for i := range s.Bodies {
 		d.readFunctionBody(r, &s.Bodies[i])
@@ -344,14 +352,17 @@ func (d *decoder) readCodeSection(r io.Reader, s *CodeSection) {
 }
 
 func (d *decoder) readFunctionBody(r io.Reader, fb *FunctionBody) {
+	d.readVarU32(r, &fb.BodySize)
 	if d.err != nil {
 		return
 	}
 
-	d.readVarU32(r, &fb.BodySize)
 	r = io.LimitReader(r, int64(fb.BodySize))
 	var locals uint32
 	d.readVarU32(r, &locals)
+	if d.err != nil {
+		return
+	}
 	fb.Locals = make([]LocalEntry, int(locals))
 	for i := range fb.Locals {
 		d.readLocalEntry(r, &fb.Locals[i])
@@ -370,12 +381,12 @@ func (d *decoder) readLocalEntry(r io.Reader, le *LocalEntry) {
 }
 
 func (d *decoder) readDataSection(r io.Reader, s *DataSection) {
+	var sz uint32
+	d.readVarU32(r, &sz)
 	if d.err != nil {
 		return
 	}
 
-	var sz uint32
-	d.readVarU32(r, &sz)
 	s.segments = make([]DataSegment, int(sz))
 	for i := range s.segments {
 		d.readDataSegment(r, &s.segments[i])
