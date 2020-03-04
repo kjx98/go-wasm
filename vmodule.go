@@ -175,27 +175,62 @@ type funcMap struct {
 }
 
 var dbgMap = map[string]funcMap{
-	"print":           {},
-	"printMem":        {},
-	"printMemHex":     {},
-	"printStorage":    {},
-	"printStorageHex": {},
+	"print":           {params: []ValueType{ValueI32, ValueI32}},
+	"printMem":        {params: []ValueType{ValueI32, ValueI32}},
+	"printMemHex":     {params: []ValueType{ValueI32, ValueI32}},
+	"printStorage":    {params: []ValueType{ValueI32}},
+	"printStorageHex": {params: []ValueType{ValueI32}},
 }
 
 var ethMap = map[string]funcMap{
-	"finish":          {},
-	"revert":          {},
-	"getCallDataSize": {},
-	"callDataCopy":    {},
-	"storageLoad":     {},
-	"storageStore":    {},
-	"getCaller":       {},
+	"finish":             {params: []ValueType{ValueI32, ValueI32}},
+	"revert":             {params: []ValueType{ValueI32, ValueI32}},
+	"getAddress":         {params: []ValueType{ValueI32}},
+	"getExternalBalance": {params: []ValueType{ValueI32, ValueI32}},
+	"storageStore":       {params: []ValueType{ValueI32, ValueI32}},
+	"storageLoad":        {params: []ValueType{ValueI32, ValueI32}},
+	"getCaller":          {params: []ValueType{ValueI32}},
+	"getTxOrigin":        {params: []ValueType{ValueI32}},
+	"log":                {params: []ValueType{ValueI32, ValueI32, ValueI32, ValueI32, ValueI32, ValueI32, ValueI32}},
+	"selfDestruct":       {params: []ValueType{ValueI32}},
+	"useGas":             {params: []ValueType{ValueI64}},
+	"getCallValue":       {params: []ValueType{ValueI32}},
+	"getCallDataSize":    {results: []ValueType{ValueI32}},
+	"callDataCopy":       {params: []ValueType{ValueI32, ValueI32, ValueI32}},
+	"getCodeSize":        {results: []ValueType{ValueI32}},
+	"codeCopy":           {params: []ValueType{ValueI32, ValueI32, ValueI32}},
+	"getGasLeft":         {results: []ValueType{ValueI64}},
+	"getBlockGasLimit":   {results: []ValueType{ValueI64}},
+	"getTxGasPrice":      {params: []ValueType{ValueI32}},
+	"getBlockNumber":     {results: []ValueType{ValueI64}},
+	"getBlockTimestamp":  {results: []ValueType{ValueI64}},
+}
+
+func eqValues(lv, rv []ValueType) bool {
+	if ll := len(lv); ll != len(rv) {
+		return false
+	} else {
+		for i := range lv {
+			if lv[i] != rv[i] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func solveImport(modName string, fn string, typ *FuncType) bool {
 	verify := func(mm map[string]funcMap) bool {
-		if _, ok := mm[fn]; !ok {
+		if sig, ok := mm[fn]; !ok {
 			log.Printf("unsolved import: mod(%s) func(%s)\n", modName, fn)
+			return false
+		} else if !eqValues(typ.params, sig.params) {
+			log.Printf("param sig dismatch %v want %v\n", sig.params,
+				typ.params)
+			return false
+		} else if !eqValues(typ.results, sig.results) {
+			log.Printf("result sig dismatch %v want %v\n", sig.results,
+				typ.results)
 			return false
 		}
 		return true

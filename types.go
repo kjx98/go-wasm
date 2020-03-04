@@ -126,7 +126,7 @@ func varint(r io.Reader) (int64, int, error) {
 	panic("unreachable")
 }
 
-type ValueType int32
+type ValueType int8
 
 // 0x7f: i32
 // 0x7e: i64
