@@ -17,6 +17,7 @@ var (
 	errExpMiss       = errors.New("wasm: exports no main or memory")
 	errExpError      = errors.New("wasm: exports main or memory sig error")
 	errHasStart      = errors.New("wasm: start Entry not empty")
+	errHasCustom     = errors.New("wasm: MUST strip custom section")
 	errReadSection   = errors.New("wasm: Validate Module, section malformed")
 	errImportFunc    = errors.New("wasm: Validate, unsolved import")
 	errImportNotFunc = errors.New("wasm: Validate, import not func")
@@ -24,12 +25,14 @@ var (
 
 // Module is a WebAssembly module.
 type ValModule struct {
-	typ        TypeSection
-	imp        ImportSection
-	exp        ExportSection
-	fn         FunctionSection
-	startEntry bool
-	buff       []byte
+	OnlyValidate bool
+	typ          TypeSection
+	imp          ImportSection
+	exp          ExportSection
+	fn           FunctionSection
+	startEntry   bool
+	bCustom      bool
+	buff         []byte
 }
 
 func (vm *ValModule) ReadValModule(inbuf []byte) error {
@@ -90,9 +93,6 @@ func (vm *ValModule) readSection(d *decoder) error {
 				}
 			}
 		}
-	case StartID:
-		vm.startEntry = true
-		fallthrough
 	default:
 		buf := make([]byte, sz)
 		d.read(r, buf)
@@ -106,9 +106,10 @@ func (vm *ValModule) readSection(d *decoder) error {
 	}
 	switch SectionID(id) {
 	case UnknownID: // skip
+		vm.bCustom = true
 	case ExportID: // filler only memory and main
 		// generate new export section
-		{
+		if !vm.OnlyValidate {
 			var obuf []byte
 			for _, ep := range vm.exp.Exports {
 				namLen := len(ep.Field)
@@ -142,8 +143,13 @@ func (vm *ValModule) readSection(d *decoder) error {
 				vm.buff = append(vm.buff, ebuff...)
 			}
 		}
+	case StartID:
+		vm.startEntry = true
+		fallthrough
 	default:
-		vm.buff = append(vm.buff, out.Bytes()...)
+		if !vm.OnlyValidate {
+			vm.buff = append(vm.buff, out.Bytes()...)
+		}
 	}
 	return nil
 }
@@ -246,6 +252,12 @@ func solveImport(modName string, fn string, typ *FuncType) bool {
 }
 
 func (vm *ValModule) Validate() error {
+	if vm.startEntry {
+		return errHasStart
+	}
+	if vm.OnlyValidate && vm.bCustom {
+		return errHasCustom
+	}
 	if len(vm.exp.Exports) != 2 {
 		return errExports
 	}
@@ -261,9 +273,6 @@ func (vm *ValModule) Validate() error {
 		return errExpMiss
 	} else if ep.Kind != MemoryKind || ep.Index != 0 {
 		return errExpError
-	}
-	if vm.startEntry {
-		return errHasStart
 	}
 	// shall we validate import
 	for _, imp := range vm.imp.Imports {
