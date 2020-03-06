@@ -15,6 +15,7 @@ var (
 	errHead          = errors.New("wasm: header missing")
 	errExports       = errors.New("wasm: MUST only 2 exports")
 	errExpMiss       = errors.New("wasm: exports no main or memory")
+	errNoDebug       = errors.New("wasm: Release w/out \"debug\" module")
 	errExpError      = errors.New("wasm: exports main or memory sig error")
 	errHasStart      = errors.New("wasm: start Entry not empty")
 	errHasCustom     = errors.New("wasm: MUST strip custom section")
@@ -26,6 +27,7 @@ var (
 // Module is a WebAssembly module.
 type ValModule struct {
 	OnlyValidate bool
+	OnlyRelease  bool
 	typ          TypeSection
 	imp          ImportSection
 	exp          ExportSection
@@ -278,6 +280,9 @@ func (vm *ValModule) Validate() error {
 	for _, imp := range vm.imp.Imports {
 		if imp.Kind != FunctionKind {
 			return errImportNotFunc
+		}
+		if vm.OnlyRelease && imp.Module == "debug" {
+			return errNoDebug
 		}
 		if idx, ok := imp.Typ.(uint32); !ok {
 			log.Printf("func idx not uint32: %v\n", imp.Typ)
