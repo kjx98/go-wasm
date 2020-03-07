@@ -26,14 +26,15 @@ var (
 
 // Module is a WebAssembly module.
 type ValModule struct {
-	OnlyValidate bool
-	OnlyRelease  bool
 	typ          TypeSection
 	imp          ImportSection
 	exp          ExportSection
 	fn           FunctionSection
+	OnlyValidate bool
+	OnlyRelease  bool
 	startEntry   bool
 	bCustom      bool
+	bDebug       bool
 	buff         []byte
 }
 
@@ -281,7 +282,11 @@ func (vm *ValModule) Validate() error {
 		if imp.Kind != FunctionKind {
 			return errImportNotFunc
 		}
-		if vm.OnlyRelease && imp.Module == "debug" {
+
+		if imp.Module == "debug" {
+			vm.bDebug = true
+		}
+		if vm.OnlyRelease && vm.bDebug {
 			return errNoDebug
 		}
 		if idx, ok := imp.Typ.(uint32); !ok {
@@ -295,6 +300,10 @@ func (vm *ValModule) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (vm *ValModule) HasDebug() bool {
+	return vm.bDebug
 }
 
 func (vm *ValModule) Bytes() []byte {
