@@ -185,6 +185,8 @@ type funcMap struct {
 
 var dbgMap = map[string]funcMap{
 	"print":           {params: []ValueType{ValueI32, ValueI32}},
+	"print32":         {params: []ValueType{ValueI32}},
+	"print64":         {params: []ValueType{ValueI64}},
 	"printMem":        {params: []ValueType{ValueI32, ValueI32}},
 	"printMemHex":     {params: []ValueType{ValueI32, ValueI32}},
 	"printStorage":    {params: []ValueType{ValueI32}},
